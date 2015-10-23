@@ -77,8 +77,9 @@ static struct drm_driver nv_drm_driver = {
     .fops = &nv_drm_fops,
 
     .name = "nvidia-drm",
-    .desc = "NVIDIA DRM driver",
-    .date = "20140818",
+    .desc = "NVIDIA DRM driver for OSMC",
+    .date = "20151023",
+    .set_busid = drm_pci_set_busid,
     .major = 0,
     .minor = 0,
     .patchlevel = 0,
