@@ -35,8 +35,8 @@ static inline void nv_disable_caches(unsigned long *cr4)
     unsigned long cr0 = read_cr0();
     write_cr0(((cr0 & (0xdfffffff)) | 0x40000000));
     wbinvd();
-    *cr4 = read_cr4();
-    if (*cr4 & 0x80) write_cr4(*cr4 & ~0x80);
+    *cr4 = NV_READ_CR4();
+    if (*cr4 & 0x80) NV_WRITE_CR4(*cr4 & ~0x80);
     __flush_tlb();
 }
 
@@ -46,7 +46,7 @@ static inline void nv_enable_caches(unsigned long cr4)
     wbinvd();
     __flush_tlb();
     write_cr0((cr0 & 0x9fffffff));
-    if (cr4 & 0x80) write_cr4(cr4);
+    if (cr4 & 0x80) NV_WRITE_CR4(cr4);
 }
 
 static int nv_determine_pat_mode(void)

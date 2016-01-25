@@ -607,7 +607,8 @@ nv_procfs_read_registry(
     registry_keys = ((nvl != NULL) ?
             nvl->registry_keys : nv_registry_keys);
 
-    return seq_printf(s, "Binary: \"%s\"\n", registry_keys);
+    seq_printf(s, "Binary: \"%s\"\n", registry_keys);
+    return 0;
 }
 
 static ssize_t
@@ -674,7 +675,8 @@ nv_procfs_read_text_file(
     void *v
 )
 {
-    return seq_puts(s, s->private);
+    seq_puts(s, s->private);
+    return 0;
 }
 
 NV_DEFINE_PROCFS_SINGLE_FILE(text_file);

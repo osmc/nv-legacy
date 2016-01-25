@@ -378,6 +378,14 @@ typedef spinlock_t                nv_spinlock_t;
 #endif
 #endif /* defined(NVCPU_X86) */
 
+#if defined(NV_WRITE_CR4_PRESENT)
+#define NV_READ_CR4()       read_cr4()
+#define NV_WRITE_CR4(cr4)   write_cr4(cr4)
+#else
+#define NV_READ_CR4()       __read_cr4()
+#define NV_WRITE_CR4(cr4)   __write_cr4(cr4)
+#endif
+
 #ifndef get_cpu
 #define get_cpu() smp_processor_id()
 #define put_cpu()
@@ -1795,5 +1803,28 @@ extern NvU64 __nv_supported_pte_mask;
 #endif
 
 #include "nv-proto.h"
+
+#if defined(NV_FILE_HAS_INODE)
+#define NV_FILE_INODE(file) (file)->f_inode
+#else
+#define NV_FILE_INODE(file) (file)->f_dentry->d_inode
+#endif
+
+#if defined(NV_GET_NUM_PHYSPAGES_PRESENT)
+#if defined(NV_FOR_EACH_ONLINE_NODE_PRESENT)
+#define NV_FOR_EACH_ONLINE_NODE(nid)   for_each_online_node(nid)
+#else
+#define NV_FOR_EACH_ONLINE_NODE(nid)   for (nid = 0; nid < MAX_NUMNODES; nid++)
+#endif
+
+static inline NvU64 nv_node_end_pfn(int nid)
+{
+#if defined(NV_NODE_END_PFN_PRESENT)
+    return node_end_pfn(nid);
+#else
+    return NODE_DATA(nid)->node_start_pfn + node_spanned_pages(nid);
+#endif
+}
+#endif /* defined(NV_GET_NUM_PHYSPAGES_PRESENT) */
 
 #endif  /* _NV_LINUX_H_ */

@@ -234,10 +234,10 @@ static inline int nv_sg_map_buffer(
 
     NV_SG_INIT_TABLE(sg_ptr, 1);
 
-#if defined(NV_SCATTERLIST_HAS_PAGE)
-    sg_ptr->page = virt_to_page(base);
-#else
+#if defined(NV_SCATTERLIST_HAS_PAGE_LINK)
     sg_ptr->page_link = (NvUPtr)virt_to_page(base);
+#else
+    sg_ptr->page = virt_to_page(base);
 #endif
     sg_ptr->offset = ((unsigned long)base & ~NV_PAGE_MASK);
     sg_ptr->length  = num_pages * PAGE_SIZE;
@@ -283,10 +283,10 @@ static inline int nv_sg_map_buffer(
 
             NV_SG_INIT_TABLE(&sg_tmp, 1);
 
-#if defined(NV_SCATTERLIST_HAS_PAGE)
-            sg_tmp.page = sg_ptr->page;
-#else
+#if defined(NV_SCATTERLIST_HAS_PAGE_LINK)
             sg_tmp.page_link = sg_ptr->page_link;
+#else
+            sg_tmp.page = sg_ptr->page;
 #endif
             sg_tmp.offset = sg_ptr->offset;
             sg_tmp.length = 2048;
@@ -465,6 +465,27 @@ static void nv_flush_caches(void)
 #endif
 }
 
+static NvU64 nv_get_max_sysmem_address(void)
+{
+#if defined(NV_VMWARE)
+    return 0ULL;
+#else
+    NvU64 global_max_pfn = 0ULL;
+#if defined(NV_GET_NUM_PHYSPAGES_PRESENT)
+    int node_id;
+
+    NV_FOR_EACH_ONLINE_NODE(node_id)
+    {
+        global_max_pfn = max(global_max_pfn, nv_node_end_pfn(node_id));
+    }
+#else
+    global_max_pfn = num_physpages;
+#endif
+
+    return ((global_max_pfn + 1) << PAGE_SHIFT) - 1;
+#endif
+}
+
 static unsigned int nv_compute_gfp_mask(
     nv_alloc_t *at
 )
@@ -472,18 +493,11 @@ static unsigned int nv_compute_gfp_mask(
     unsigned int gfp_mask = NV_GFP_KERNEL;
     struct pci_dev *dev = at->dev;
 #if !(defined(CONFIG_X86_UV) && defined(NV_CONFIG_X86_UV))
-    NvU64 system_memory_size;
-
-    system_memory_size = (os_get_system_memory_size() * RM_PAGE_SIZE);
-    if (system_memory_size != 0)
+    NvU64 max_sysmem_address = nv_get_max_sysmem_address();
+    if (max_sysmem_address != 0)
     {
-#if !defined(NV_GET_NUM_PHYSPAGES_PRESENT)
-        if (dev->dma_mask < (system_memory_size - 1))
+        if (dev->dma_mask < max_sysmem_address)
             gfp_mask = NV_GFP_DMA32;
-#else
-        if (dev->dma_mask <= (system_memory_size - 1))
-            gfp_mask = NV_GFP_DMA32;
-#endif
     }
     else if (dev->dma_mask < 0xffffffffffULL)
     {

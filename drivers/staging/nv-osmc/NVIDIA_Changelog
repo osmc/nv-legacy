@@ -1,6 +1,34 @@
 
 ======== Release 304 Entries ========
 
+    * Fixed a bug that could cause texture corruption in some OpenGL
+      applications when video memory is exhausted by a combination of
+      simultaneously running graphical and compute workloads.
+
+    * Added support for X.Org xserver ABI 20 (xorg-server 1.18).
+
+2015-08-31 version 304.128
+
+    * Removed libvdpau and libvdpau_trace from the NVIDIA driver package.
+      VDPAU is not supported on the legacy hardware supported on the
+      release 304 legacy driver branch. The libvdpau_nvidia vendor library
+      is still included, so users who wish to use VDPAU with newer hardware
+      that still works with release 304 drivers may install libvdpau from
+      packages provided by the OS vendor where available, or from the source
+      code available at:
+
+      http://people.freedesktop.org/~aplattner/vdpau/
+
+    * Updated nvidia-installer to use modprobe(8) when leaving the NVIDIA
+      kernel module loaded after installation, instead of insmod(8) or
+      libkmod. This allows the kernel module to honor any configuration
+      directives that apply to it in /etc/modprobe.d when it is loaded.
+
+    * Fixed a bug that allowed console messages from the Linux kernel to be
+      drawn over the user interface of nvidia-installer.
+
+2014-12-05 version 304.125
+
     * Added support for X.Org xserver ABI 19 (xorg-server 1.17).
 
     * Improved compatibility with recent Linux kernels.

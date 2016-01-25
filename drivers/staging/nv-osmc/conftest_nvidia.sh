@@ -199,6 +199,45 @@ append_conftest() {
     done
 }
 
+compile_check_conftest() {
+    #
+    # Compile the current conftest C file and check+output the result
+    #
+    CODE="$1"
+    DEF="$2"
+    VAL="$3"
+    CAT="$4"
+
+    echo "$CONFTEST_PREAMBLE
+    $CODE" > conftest$$.c
+
+    $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
+    rm -f conftest$$.c
+
+    if [ -f conftest$$.o ]; then
+        rm -f conftest$$.o
+        if [ "${CAT}" = "functions" ]; then
+            # The logic for "functions" compilation tests is inverted compared to
+            # other compilation steps: if the function is present, the code
+            # snippet will fail to compile because the function call won't match
+            # the prototype. If the function is not present, the code snippet
+            # will produce an object file with the function as an unresolved
+            # symbol.
+            echo "#undef ${DEF}" | append_conftest "${CAT}"
+        else
+            echo "#define ${DEF} ${VAL}" | append_conftest "${CAT}"
+        fi
+        return
+    else
+        if [ "${CAT}" = "functions" ]; then
+            echo "#define ${DEF} ${VAL}" | append_conftest "${CAT}"
+        else
+            echo "#undef ${DEF}" | append_conftest "${CAT}"
+        fi
+        return
+    fi
+}
+
 compile_test() {
     case "$1" in
         remap_page_range)
@@ -263,76 +302,51 @@ compile_test() {
             #
             # Determine if the set_memory_uc() function is present.
             #
-            # The logic in this test, and similar tests below, might look
-            # backwards, but it is correct: if the function is present, the code
-            # snippet will fail to compile because the function call won't match
-            # the prototype. If the function is not present, the code snippet
-            # will produce an object file with the function as an unresolved
-            # symbol.
-            #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <asm/cacheflush.h>
             void conftest_set_memory_uc(void) {
                 set_memory_uc();
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                rm -f conftest$$.o
-                echo "#undef NV_SET_MEMORY_UC_PRESENT" >> conftest.h
-                return
-            else
-                echo "#define NV_SET_MEMORY_UC_PRESENT" >> conftest.h
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_SET_MEMORY_UC_PRESENT" "" "functions"
         ;;
 
         set_memory_array_uc)
             #
             # Determine if the set_memory_array_uc() function is present.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <asm/cacheflush.h>
             void conftest_set_memory_array_uc(void) {
                 set_memory_array_uc();
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                rm -f conftest$$.o
-                echo "#undef NV_SET_MEMORY_ARRAY_UC_PRESENT" >> conftest.h
-                return
-            else
-                echo "#define NV_SET_MEMORY_ARRAY_UC_PRESENT" >> conftest.h
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_SET_MEMORY_ARRAY_UC_PRESENT" "" "functions"
         ;;
 
         set_pages_uc)
             #
             # Determine if the set_pages_uc() function is present.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <asm/cacheflush.h>
             void conftest_set_pages_uc(void) {
                 set_pages_uc();
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
+        ;;
 
-            if [ -f conftest$$.o ]; then
-                rm -f conftest$$.o
-                echo "#undef NV_SET_PAGES_UC_PRESENT" >> conftest.h
-                return
-            else
-                echo "#define NV_SET_PAGES_UC_PRESENT" >> conftest.h
-                return
-            fi
+        outer_flush_all)
+            #
+            # Determine if the outer_cache_fns struct has flush_all member.
+            #
+            CODE="
+            #include <asm/outercache.h>
+            int conftest_outer_flush_all(void) {
+                return offsetof(struct outer_cache_fns, flush_all);
+            }"
+
+            compile_check_conftest "$CODE" "NV_OUTER_FLUSH_ALL_PRESENT" "" "types"
         ;;
 
         change_page_attr)
@@ -340,7 +354,7 @@ compile_test() {
             # Determine if the change_page_attr() function is
             # present.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/version.h>
             #include <linux/utsname.h>
             #include <linux/mm.h>
@@ -349,19 +363,9 @@ compile_test() {
             #endif
             void conftest_change_page_attr(void) {
                 change_page_attr();
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                echo "#undef NV_CHANGE_PAGE_ATTR_PRESENT" >> conftest.h
-                rm -f conftest$$.o
-                return
-            else
-                echo "#define NV_CHANGE_PAGE_ATTR_PRESENT" >> conftest.h
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_CHANGE_PAGE_ATTR_PRESENT" "" "functions"
         ;;
 
         pci_get_class)
@@ -369,23 +373,13 @@ compile_test() {
             # Determine if the pci_get_class() function is
             # present.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/pci.h>
             void conftest_pci_get_class(void) {
                 pci_get_class();
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                echo "#undef NV_PCI_GET_CLASS_PRESENT" >> conftest.h
-                rm -f conftest$$.o
-                return
-            else
-                echo "#define NV_PCI_GET_CLASS_PRESENT" >> conftest.h
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_PCI_GET_CLASS_PRESENT" "" "functions"
         ;;
 
         pci_get_domain_bus_and_slot)
@@ -393,23 +387,13 @@ compile_test() {
             # Determine if the pci_get_domain_bus_and_slot() function
             # is present.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/pci.h>
             void conftest_pci_get_domain_bus_and_slot(void) {
                 pci_get_domain_bus_and_slot();
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                echo "#undef NV_PCI_GET_DOMAIN_BUS_AND_SLOT_PRESENT" >> conftest.h
-                rm -f conftest$$.o
-                return
-            else
-                echo "#define NV_PCI_GET_DOMAIN_BUS_AND_SLOT_PRESENT" >> conftest.h
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_PCI_GET_DOMAIN_BUS_AND_SLOT_PRESENT" "" "functions"
         ;;
 
         remap_pfn_range)
@@ -417,23 +401,13 @@ compile_test() {
             # Determine if the remap_pfn_range() function is
             # present.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/mm.h>
             void conftest_remap_pfn_range(void) {
                 remap_pfn_range();
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                echo "#undef NV_REMAP_PFN_RANGE_PRESENT" >> conftest.h
-                rm -f conftest$$.o
-                return
-            else
-                echo "#define NV_REMAP_PFN_RANGE_PRESENT" >> conftest.h
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_REMAP_PFN_RANGE_PRESENT" "" "functions"
         ;;
 
         agp_backend_acquire)
@@ -560,39 +534,21 @@ compile_test() {
             # Determine if the 'i2c_adapter' structure has inc_use()
             # and client_register() members.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/i2c.h>
             int conftest_i2c_adapter(void) {
                 return offsetof(struct i2c_adapter, inc_use);
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
+            compile_check_conftest "$CODE" "NV_I2C_ADAPTER_HAS_INC_USE" "" "types"
 
-            if [ -f conftest$$.o ]; then
-                echo "#define NV_I2C_ADAPTER_HAS_INC_USE" >> conftest.h
-                rm -f conftest$$.o
-            else
-                echo "#undef NV_I2C_ADAPTER_HAS_INC_USE" >> conftest.h
-            fi
-
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/i2c.h>
             int conftest_i2c_adapter(void) {
                 return offsetof(struct i2c_adapter, client_register);
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                echo "#define NV_I2C_ADAPTER_HAS_CLIENT_REGISTER" >> conftest.h
-                rm -f conftest$$.o
-                return
-            else
-                echo "#undef NV_I2C_ADAPTER_HAS_CLIENT_REGISTER" >> conftest.h
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_I2C_ADAPTER_HAS_CLIENT_REGISTER" "" "types"
         ;;
 
         pm_message_t)
@@ -642,23 +598,13 @@ compile_test() {
             # Determine if the pci_choose_state() function is
             # present.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/pci.h>
             void conftest_pci_choose_state(void) {
                 pci_choose_state();
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                echo "#undef NV_PCI_CHOOSE_STATE_PRESENT" >> conftest.h
-                rm -f conftest$$.o
-                return
-            else
-                echo "#define NV_PCI_CHOOSE_STATE_PRESENT" >> conftest.h
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_PCI_CHOOSE_STATE_PRESENT" "" "functions"
         ;;
 
         vm_insert_page)
@@ -666,23 +612,13 @@ compile_test() {
             # Determine if the vm_insert_page() function is
             # present.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/mm.h>
             void conftest_vm_insert_page(void) {
                 vm_insert_page();
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                echo "#undef NV_VM_INSERT_PAGE_PRESENT" >> conftest.h
-                rm -f conftest$$.o
-                return
-            else
-                echo "#define NV_VM_INSERT_PAGE_PRESENT" >> conftest.h
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_VM_INSERT_PAGE_PRESENT" "" "functions"
         ;;
 
         irq_handler_t)
@@ -749,23 +685,13 @@ compile_test() {
             # Determine if the 'acpi_device_ops' structure has
             # a match() member.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/acpi.h>
             int conftest_acpi_device_ops(void) {
                 return offsetof(struct acpi_device_ops, match);
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                rm -f conftest$$.o
-                echo "#define NV_ACPI_DEVICE_OPS_HAS_MATCH" >> conftest.h
-                return
-            else
-                echo "#undef NV_ACPI_DEVICE_OPS_HAS_MATCH" >> conftest.h
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_ACPI_DEVICE_OPS_HAS_MATCH" "" "types"
         ;;
 
         acpi_op_remove)
@@ -792,26 +718,16 @@ compile_test() {
                 return
             fi
 
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/acpi.h>
 
             acpi_op_remove conftest_op_remove_routine;
 
             int conftest_acpi_device_ops_remove(struct acpi_device *device, int type) {
                 return conftest_op_remove_routine(device, type);
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                rm -f conftest$$.o
-                echo "#define NV_ACPI_DEVICE_OPS_REMOVE_ARGUMENT_COUNT 2"  >> conftest.h
-                return
-            else
-                echo "#undef NV_ACPI_DEVICE_OPS_REMOVE_ARGUMENT_COUNT"  >> conftest.h
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_ACPI_DEVICE_OPS_REMOVE_ARGUMENT_COUNT" "2" "types"
         ;;
 
         acpi_device_id)
@@ -819,23 +735,13 @@ compile_test() {
             # Determine if the 'acpi_device_id' structure has 
             # a 'driver_data' member.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/acpi.h>
             int conftest_acpi_device_id(void) {
                 return offsetof(struct acpi_device_id, driver_data);
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                echo "#define NV_ACPI_DEVICE_ID_HAS_DRIVER_DATA" >> conftest.h
-                rm -f conftest$$.o
-                return
-            else
-                echo "#undef NV_ACPI_DEVICE_ID_HAS_DRIVER_DATA" >> conftest.h
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_ACPI_DEVICE_ID_HAS_DRIVER_DATA" "" "types"
         ;;
 
         acquire_console_sem)
@@ -843,46 +749,26 @@ compile_test() {
             # Determine if the acquire_console_sem() function
             # is present.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/console.h>
             void conftest_acquire_console_sem(void) {
                 acquire_console_sem(NULL);
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                rm -f conftest$$.o
-                echo "#undef NV_ACQUIRE_CONSOLE_SEM_PRESENT" >> conftest.h
-                return
-            else
-                echo "#define NV_ACQUIRE_CONSOLE_SEM_PRESENT" >> conftest.h
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_ACQUIRE_CONSOLE_SEM_PRESENT" "" "functions"
         ;;
 
         console_lock)
             #
             # Determine if the console_lock() function is present.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/console.h>
             void conftest_console_lock(void) {
                 console_lock(NULL);
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                rm -f conftest$$.o
-                echo "#undef NV_CONSOLE_LOCK_PRESENT" | append_conftest "functions"
-                return
-            else
-                echo "#define NV_CONSOLE_LOCK_PRESENT" | append_conftest "functions"
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_CONSOLE_LOCK_PRESENT" "" "functions"
         ;;
 
         kmem_cache_create)
@@ -1174,46 +1060,26 @@ compile_test() {
             #
             # Determine if the ioremap_cache() function is present.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <asm/io.h>
             void conftest_ioremap_cache(void) {
                 ioremap_cache();
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                rm -f conftest$$.o
-                echo "#undef NV_IOREMAP_CACHE_PRESENT" >> conftest.h
-                return
-            else
-                echo "#define NV_IOREMAP_CACHE_PRESENT" >> conftest.h
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_IOREMAP_CACHE_PRESENT" "" "functions"
         ;;
 
         ioremap_wc)
             #
             # Determine if the ioremap_wc() function is present.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <asm/io.h>
             void conftest_ioremap_wc(void) {
                 ioremap_wc();
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                rm -f conftest$$.o
-                echo "#undef NV_IOREMAP_WC_PRESENT" >> conftest.h
-                return
-            else
-                echo "#define NV_IOREMAP_WC_PRESENT" >> conftest.h
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_IOREMAP_WC_PRESENT" "" "functions"
         ;;
 
         proc_dir_entry)
@@ -1221,23 +1087,13 @@ compile_test() {
             # Determine if the 'proc_dir_entry' structure has 
             # an 'owner' member.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/proc_fs.h>
             int conftest_proc_dir_entry(void) {
                 return offsetof(struct proc_dir_entry, owner);
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                echo "#define NV_PROC_DIR_ENTRY_HAS_OWNER" >> conftest.h
-                rm -f conftest$$.o
-                return
-            else
-                echo "#undef NV_PROC_DIR_ENTRY_HAS_OWNER" >> conftest.h
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_PROC_DIR_ENTRY_HAS_OWNER" "" "types"
         ;;
 
       INIT_WORK)
@@ -1367,48 +1223,28 @@ compile_test() {
             # Determine if the 'scatterlist' structure has
             # a 'page_link' member.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/types.h>
             #include <linux/scatterlist.h>
             int conftest_scatterlist(void) {
                 return offsetof(struct scatterlist, page_link);
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                echo "#undef NV_SCATTERLIST_HAS_PAGE" >> conftest.h
-                rm -f conftest$$.o
-                return
-            else
-                echo "#define NV_SCATTERLIST_HAS_PAGE" >> conftest.h
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_SCATTERLIST_HAS_PAGE_LINK" "" "types"
         ;;
 
         pci_domain_nr)
             #
             # Determine if the pci_domain_nr() function is present.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/types.h>
             #include <linux/pci.h>
             int conftest_pci_domain_nr(struct pci_dev *dev) {
                 return pci_domain_nr();
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                echo "#undef NV_PCI_DOMAIN_NR_PRESENT" >> conftest.h
-                rm -f conftest$$.o
-                return
-            else
-                echo "#define NV_PCI_DOMAIN_NR_PRESENT" >> conftest.h
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_PCI_DOMAIN_NR_PRESENT" "" "functions"
         ;;
 
         file_operations)
@@ -1416,53 +1252,29 @@ compile_test() {
             # Determine if the 'file_operations' structure has
             # 'ioctl', 'unlocked_ioctl' and 'compat_ioctl' fields.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/fs.h>
             int conftest_file_operations(void) {
                 return offsetof(struct file_operations, ioctl);
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
+            compile_check_conftest "$CODE" "NV_FILE_OPERATIONS_HAS_IOCTL" "" "types"
 
-            if [ -f conftest$$.o ]; then
-                echo "#define NV_FILE_OPERATIONS_HAS_IOCTL" >> conftest.h
-                rm -f conftest$$.o
-            else
-                echo "#undef NV_FILE_OPERATIONS_HAS_IOCTL" >> conftest.h
-            fi
-
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/fs.h>
             int conftest_file_operations(void) {
                 return offsetof(struct file_operations, unlocked_ioctl);
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
+            compile_check_conftest "$CODE" "NV_FILE_OPERATIONS_HAS_UNLOCKED_IOCTL" "" "types"
 
-            if [ -f conftest$$.o ]; then
-                echo "#define NV_FILE_OPERATIONS_HAS_UNLOCKED_IOCTL" >> conftest.h
-                rm -f conftest$$.o
-            else
-                echo "#undef NV_FILE_OPERATIONS_HAS_UNLOCKED_IOCTL" >> conftest.h
-            fi
-
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/fs.h>
             int conftest_file_operations(void) {
                 return offsetof(struct file_operations, compat_ioctl);
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                echo "#define NV_FILE_OPERATIONS_HAS_COMPAT_IOCTL" >> conftest.h
-                rm -f conftest$$.o
-            else
-                echo "#undef NV_FILE_OPERATIONS_HAS_COMPAT_IOCTL" >> conftest.h
-            fi
+            compile_check_conftest "$CODE" "NV_FILE_OPERATIONS_HAS_COMPAT_IOCTL" "" "types"
         ;;
 
         sg_init_table)
@@ -1556,23 +1368,13 @@ compile_test() {
             #
             # Determine if the proc_create_data() function is present.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/proc_fs.h>
             void conftest_proc_create_data(void) {
                 proc_create_data();
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                rm -f conftest$$.o
-                echo "#undef NV_PROC_CREATE_DATA_PRESENT" >> conftest.h
-                return
-            else
-                echo "#define NV_PROC_CREATE_DATA_PRESENT" >> conftest.h
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_PROC_CREATE_DATA_PRESENT" "" "functions"
         ;;
 
 
@@ -1580,53 +1382,33 @@ compile_test() {
             #
             # Determine if the PDE_DATA() function is present.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/proc_fs.h>
             void conftest_PDE_DATA(void) {
                 PDE_DATA();
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                rm -f conftest$$.o
-                echo "#undef NV_PDE_DATA_PRESENT" >> conftest.h
-                return
-            else
-                echo "#define NV_PDE_DATA_PRESENT" >> conftest.h
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_PDE_DATA_PRESENT" "" "functions"
         ;;
 
         proc_remove)
             #
             # Determine if the proc_remove() function is present.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/proc_fs.h>
             void conftest_proc_remove(void) {
                 proc_remove();
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                rm -f conftest$$.o
-                echo "#undef NV_PROC_REMOVE_PRESENT" >> conftest.h
-                return
-            else
-                echo "#define NV_PROC_REMOVE_PRESENT" >> conftest.h
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_PROC_REMOVE_PRESENT" "" "functions"
         ;;
 
         drm_available)
             #
             # Determine if the DRM subsystem is usable
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #if defined(NV_DRM_DRMP_H_PRESENT)
             #include <drm/drmP.h>
             #endif
@@ -1641,19 +1423,9 @@ compile_test() {
                 drv.gem_prime_vunmap = 0;
                 (void)drm_gem_prime_import;
                 (void)drm_gem_prime_export;
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ ! -f conftest$$.o ]; then
-                echo "#undef NV_DRM_AVAILABLE" >> conftest.h
-                return
-            else
-                echo "#define NV_DRM_AVAILABLE" >> conftest.h
-                rm -f conftest$$.o
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_DRM_AVAILABLE" "" "generic"
         ;;
 
         get_num_physpages)
@@ -1661,48 +1433,98 @@ compile_test() {
             # Determine if the get_num_physpages() function is
             # present.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/mm.h>
             void conftest_get_num_physpages(void) {
                 get_num_physpages(NULL);
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                echo "#undef NV_GET_NUM_PHYSPAGES_PRESENT" >> conftest.h
-                rm -f conftest$$.o
-                return
-            else
-                echo "#define NV_GET_NUM_PHYSPAGES_PRESENT" >> conftest.h
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_GET_NUM_PHYSPAGES_PRESENT" "" "functions"
         ;;
 
         pm_vt_switch_required)
             #
             # Determine if the pm_vt_switch_required() function is present.
             #
-            echo "$CONFTEST_PREAMBLE
+            CODE="
             #include <linux/pm.h>
             void conftest_pm_vt_switch_required(void) {
                 pm_vt_switch_required();
-            }" > conftest$$.c
+            }"
 
-            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-            rm -f conftest$$.c
-
-            if [ -f conftest$$.o ]; then
-                rm -f conftest$$.o
-                echo "#undef NV_PM_VT_SWITCH_REQUIRED_PRESENT" | append_conftest "functions"
-                return
-            else
-                echo "#define NV_PM_VT_SWITCH_REQUIRED_PRESENT" | append_conftest "functions"
-                return
-            fi
+            compile_check_conftest "$CODE" "NV_PM_VT_SWITCH_REQUIRED_PRESENT" "" "functions"
         ;;
 
+        file_inode)
+            #
+            # Determine if the 'file' structure has
+            # a 'f_inode' field.
+            #
+            CODE="
+            #include <linux/fs.h>
+            int conftest_file_inode(void) {
+                return offsetof(struct file, f_inode);
+            }"
+
+            compile_check_conftest "$CODE" "NV_FILE_HAS_INODE" "" "types"
+        ;;
+
+        drm_pci_set_busid)
+            #
+            # Determine if the drm_pci_set_busid function is present.
+            #
+            CODE="
+            #if defined(NV_DRM_DRMP_H_PRESENT)
+            #include <drm/drmP.h>
+            #endif
+            void conftest_drm_pci_set_busid(void) {
+                drm_pci_set_busid();
+            }"
+
+            compile_check_conftest "$CODE" "NV_DRM_PCI_SET_BUSID_PRESENT" "" "functions"
+        ;;
+
+        write_cr4)
+            #
+            # Determine if the write_cr4() function is present.
+            #
+            CODE="
+            #include <asm/processor.h>
+            #if defined(NV_ASM_SYSTEM_H_PRESENT)
+            #include <asm/system.h>
+            #endif
+            void conftest_write_cr4(void) {
+                write_cr4();
+            }"
+
+            compile_check_conftest "$CODE" "NV_WRITE_CR4_PRESENT" "" "functions"
+        ;;
+
+        for_each_online_node)
+            #
+            # Determine if the for_each_online_node() function is present.
+            #
+            CODE="
+            #include <linux/mm.h>
+            void conftest_for_each_online_node() {
+                for_each_online_node();
+            }"
+
+            compile_check_conftest "$CODE" "NV_FOR_EACH_ONLINE_NODE_PRESENT" "" "functions"
+        ;;
+
+        node_end_pfn)
+            #
+            # Determine if the node_end_pfn() function is present.
+            #
+            CODE="
+            #include <linux/mm.h>
+            void conftest_node_end_pfn() {
+                node_end_pfn();
+            }"
+
+            compile_check_conftest "$CODE" "NV_NODE_END_PFN_PRESENT" "" "functions"
+        ;;
     esac
 }
 
