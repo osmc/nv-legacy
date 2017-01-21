@@ -259,7 +259,8 @@ int nv_kern_mmap(
 
     rmStatus = rm_validate_mmap_request(sp, nv, NV_VMA_OFFSET(vma),
             NV_VMA_SIZE(vma), &prot);
-    if (rmStatus != RM_OK)
+    if ((rmStatus != RM_OK) &&
+        (NULL == nv_find_alloc(nvl, NV_VMA_OFFSET(vma), NV_ALLOC_TYPE_PCI)))
     {
         status = -EINVAL;
         goto done;

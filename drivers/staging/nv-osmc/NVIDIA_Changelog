@@ -1,6 +1,23 @@
 
 ======== Release 304 Entries ========
 
+    * Added support for X.Org xserver ABI 23 (xorg-server 1.19)
+
+    * Fixed a bug that allowed nvidia-installer to attempt loading kernel
+      modules that were built against non-running kernels.
+
+2016-09-26 version 304.132
+
+    * Added /var/log/dmesg to the list of paths which are searched by
+      nvidia-bug-report.sh for kernel messages.
+
+    * Fixed a bug that caused kernel panics when using the NVIDIA driver
+      on v4.5 and newer Linux kernels built with CONFIG_DEBUG_VM_PGFLAGS.
+
+    * Updated nvidia-installer to support ncurses version 6.x.
+
+2015-11-16 version 304.131
+
     * Fixed a bug that could cause texture corruption in some OpenGL
       applications when video memory is exhausted by a combination of
       simultaneously running graphical and compute workloads.

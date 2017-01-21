@@ -80,7 +80,7 @@ static struct drm_driver nv_drm_driver = {
 #endif
 
     .name = "nvidia-drm",
-    .desc = "NVIDIA DRM driver for OSMC",
+    .desc = "NVIDIA DRM driver",
     .date = "20150116",
     .major = 0,
     .minor = 0,

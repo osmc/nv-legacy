@@ -548,7 +548,7 @@ RM_STATUS nv_alloc_contig_pages(
     at->order = nv_calc_order(at->num_pages * PAGE_SIZE);
     gfp_mask = nv_compute_gfp_mask(at);
 
-    NV_GET_FREE_PAGES(virt_addr, at->order, (gfp_mask | __GFP_COMP));
+    NV_GET_FREE_PAGES(virt_addr, at->order, gfp_mask);
     if (virt_addr == 0)
     {
         nv_printf(NV_DBG_ERRORS,

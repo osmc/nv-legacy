@@ -49,8 +49,8 @@ RM_STATUS NV_API_CALL nv_lock_user_pages(
     }
 
     down_read(&mm->mmap_sem);
-    ret = get_user_pages(current, mm, (unsigned long)address,
-            page_count, write, force, user_pages, NULL);
+    ret = NV_GET_USER_PAGES((unsigned long)address,
+                            page_count, write, force, user_pages, NULL);
     up_read(&mm->mmap_sem);
     pinned = ret;
 
@@ -62,7 +62,7 @@ RM_STATUS NV_API_CALL nv_lock_user_pages(
     else if (pinned < page_count)
     {
         for (i = 0; i < pinned; i++)
-            page_cache_release(user_pages[i]);
+            put_page(user_pages[i]);
         os_free_mem(user_pages);
         return RM_ERR_INVALID_ADDRESS;
     }
@@ -80,7 +80,7 @@ RM_STATUS NV_API_CALL nv_lock_user_pages(
             {
                 pci_unmap_page(dev, pte_array[j],
                         PAGE_SIZE, PCI_DMA_BIDIRECTIONAL);
-                page_cache_release(user_pages[j]);
+                put_page(user_pages[j]);
             }
             os_free_mem(user_pages);
             return RM_ERR_OPERATING_SYSTEM;
@@ -114,7 +114,7 @@ RM_STATUS NV_API_CALL nv_unlock_user_pages(
                 PAGE_SIZE, PCI_DMA_BIDIRECTIONAL);
         if (write)
             set_page_dirty_lock(user_pages[i]);
-        page_cache_release(user_pages[i]);
+        put_page(user_pages[i]);
     }
 
     os_free_mem(user_pages);

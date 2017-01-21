@@ -1827,4 +1827,72 @@ static inline NvU64 nv_node_end_pfn(int nid)
 }
 #endif /* defined(NV_GET_NUM_PHYSPAGES_PRESENT) */
 
+/*  get_user_pages_remote() was added by:
+ *    2016 Feb 12: 1e9877902dc7e11d2be038371c6fbf2dfcd469d7
+ *
+ *  The very next commit (cde70140fed8429acf7a14e2e2cbd3e329036653)
+ *  deprecated the 8-argument version of get_user_pages for the
+ *  non-remote case (calling get_user_pages with current and current->mm).
+ *
+ *  The guidelines are: call NV_GET_USER_PAGES_REMOTE if you need the 8-argument
+ *  version that uses something other than current and current->mm. Use
+ *  NV_GET_USER_PAGES if you are refering to current and current->mm.
+ *
+ *  Note that get_user_pages_remote() requires the caller to hold a reference on
+ *  the task_struct (if non-NULL) and the mm_struct. This will always be true
+ *  when using current and current->mm. If the kernel passes the driver a vma
+ *  via driver callback, the kernel holds a reference on vma->vm_mm over that
+ *  callback.
+ */
+
+#if defined(NV_GET_USER_PAGES_REMOTE_PRESENT)
+    #if defined(NV_GET_USER_PAGES_HAS_WRITE_AND_FORCE_ARGS)
+        #define NV_GET_USER_PAGES           get_user_pages
+        #define NV_GET_USER_PAGES_REMOTE    get_user_pages_remote
+    #else
+        #include <linux/mm.h>
+
+        static inline long NV_GET_USER_PAGES(unsigned long start,
+                                             unsigned long nr_pages,
+                                             int write,
+                                             int force,
+                                             struct page **pages,
+                                             struct vm_area_struct **vmas)
+        {
+            unsigned int flags = 0;
+
+            if (write)
+                flags |= FOLL_WRITE;
+            if (force)
+                flags |= FOLL_FORCE;
+
+            return get_user_pages(start, nr_pages, flags, pages, vmas);
+        }
+
+        static inline long NV_GET_USER_PAGES_REMOTE(struct task_struct *tsk,
+                                                    struct mm_struct *mm,
+                                                    unsigned long start,
+                                                    unsigned long nr_pages,
+                                                    int write,
+                                                    int force,
+                                                    struct page **pages,
+                                                    struct vm_area_struct **vmas)
+        {
+            unsigned int flags = 0;
+
+            if (write)
+                flags |= FOLL_WRITE;
+            if (force)
+                flags |= FOLL_FORCE;
+
+            return get_user_pages_remote(tsk, mm, start, nr_pages, flags, pages, vmas);
+        }
+    #endif
+#else
+    #define NV_GET_USER_PAGES(start, nr_pages, write, force, pages, vmas) \
+        get_user_pages(current, current->mm, start, nr_pages, write, force, pages, vmas)
+
+    #define NV_GET_USER_PAGES_REMOTE    get_user_pages
+#endif
+
 #endif  /* _NV_LINUX_H_ */
