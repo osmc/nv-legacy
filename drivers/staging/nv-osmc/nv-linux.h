@@ -1843,6 +1843,9 @@ static inline NvU64 nv_node_end_pfn(int nid)
  *  when using current and current->mm. If the kernel passes the driver a vma
  *  via driver callback, the kernel holds a reference on vma->vm_mm over that
  *  callback.
+ *
+ *  get_user_pages_remote() added 'locked' parameter
+ *    2016 Dec 14:5b56d49fc31dbb0487e14ead790fc81ca9fb2c99
  */
 
 #if defined(NV_GET_USER_PAGES_REMOTE_PRESENT)
@@ -1885,7 +1888,18 @@ static inline NvU64 nv_node_end_pfn(int nid)
             if (force)
                 flags |= FOLL_FORCE;
 
-            return get_user_pages_remote(tsk, mm, start, nr_pages, flags, pages, vmas);
+        #if defined(NV_GET_USER_PAGES_REMOTE_HAS_LOCKED_ARG)
+
+               return get_user_pages_remote(tsk, mm, start, nr_pages, flags,
+                                            pages, vmas, NULL);
+
+        #else
+
+               return get_user_pages_remote(tsk, mm, start, nr_pages, flags,
+                                            pages, vmas);
+
+        #endif
+
         }
     #endif
 #else
@@ -1894,5 +1908,34 @@ static inline NvU64 nv_node_end_pfn(int nid)
 
     #define NV_GET_USER_PAGES_REMOTE    get_user_pages
 #endif
+
+//
+// mtrr_add/del() are no longer exported for kernel modules since commit -
+// 2015 Aug 24: 2baa891e42d84159b693eadd44f6fe1486285bdc
+// and they are replaced with arch agnostic calls arch_phys_wc_add/del()
+// which are introduced by -
+// 2013 May 13: d0d98eedee2178c803dd824bb09f52b0e2ac1811
+// So use arch_phys_wc_add/del() calls instead of mtrr_add/del() when available.
+//
+
+#if !defined(NV_VMWARE) && defined(CONFIG_MTRR)
+static inline int nv_mtrr_add(unsigned long base, unsigned long size)
+{
+#if defined(NV_ARCH_PHYS_WC_ADD_PRESENT)
+    return arch_phys_wc_add(base, size);
+#else
+    return mtrr_add(base, size, MTRR_TYPE_WRCOMB, 0x0);
+#endif
+}
+
+static inline void nv_mtrr_del(int reg, unsigned long base, unsigned long size)
+{
+#if defined(NV_ARCH_PHYS_WC_ADD_PRESENT)
+    arch_phys_wc_del(reg);
+#else
+    mtrr_del(-1, base, size);
+#endif
+}
+#endif  /* !defined(NV_VMWARE) && defined(CONFIG_MTRR) */
 
 #endif  /* _NV_LINUX_H_ */

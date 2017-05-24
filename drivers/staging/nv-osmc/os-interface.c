@@ -592,34 +592,45 @@ NvS32 NV_API_CALL os_mem_cmp(
 
 RM_STATUS NV_API_CALL os_alloc_mem(
     void **address,
-    NvU32 size
+    NvU64 size
 )
 {
+    unsigned long alloc_size;
+
     if (address == NULL)
         return RM_ERR_INVALID_ARGUMENT;
 
     *address = NULL;
     NV_MEM_TRACKING_PAD_SIZE(size);
 
+    //
+    // NV_KMALLOC, nv_vmalloc take an input of 4 bytes in x86. To avoid 
+    // truncation and wrong allocation, below check is required.
+    //
+    alloc_size = size;
+
+    if (alloc_size != size)
+        return RM_ERR_INVALID_LIMIT;
+
     if (!NV_MAY_SLEEP())
     {
-        if (size <= KMALLOC_LIMIT)
-            NV_KMALLOC_ATOMIC(*address, size);
+        if (alloc_size <= KMALLOC_LIMIT)
+            NV_KMALLOC_ATOMIC(*address, alloc_size);
     }
     else
     {
-        if (size <= KMALLOC_LIMIT)
+        if (alloc_size <= KMALLOC_LIMIT)
         {
-            NV_KMALLOC(*address, size);
+            NV_KMALLOC(*address, alloc_size);
         }
         if (*address == NULL)
         {
-            NV_VMALLOC(*address, size, 1);
-            size |= VMALLOC_ALLOCATION_SIZE_FLAG;
+            NV_VMALLOC(*address, alloc_size, 1);
+            alloc_size |= VMALLOC_ALLOCATION_SIZE_FLAG;
         }
     }
 
-    NV_MEM_TRACKING_HIDE_SIZE(address, size);
+    NV_MEM_TRACKING_HIDE_SIZE(address, alloc_size);
 
     return ((*address != NULL) ? RM_OK : RM_ERR_NO_FREE_MEM);
 }

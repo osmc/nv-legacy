@@ -117,14 +117,15 @@ RM_STATUS KernInitAGP(
 
     if (nv_pat_mode == NV_PAT_MODE_DISABLED)
     {
-#ifdef CONFIG_MTRR
+#if defined(CONFIG_MTRR)
         /*
          * Failure to set a write-combining range on the AGP aperture may
          * be due to the presence of other memory ranges with conflicting
          * caching  attributes. Play safe and fail AGP initialization.
          */
-        if (mtrr_add(agp_info.aper_base, agp_info.aper_size << 20,
-                MTRR_TYPE_WRCOMB, 0) < 0)
+        nv->agp.arch_phys_wc_add_token = nv_mtrr_add(agp_info.aper_base,
+                                                     agp_info.aper_size << 20);
+        if (nv->agp.arch_phys_wc_add_token < 0)
 #endif
         {
             nv_printf(NV_DBG_ERRORS, 
@@ -174,10 +175,13 @@ RM_STATUS KernInitAGP(
     return RM_OK;
 
 failed:
-#ifdef CONFIG_MTRR
+#if defined(CONFIG_MTRR)
     if (nv_pat_mode == NV_PAT_MODE_DISABLED)
-        mtrr_del(-1, agp_info.aper_base, agp_info.aper_size << 20);
+    {
+        nv_mtrr_del(nv->agp.arch_phys_wc_add_token, agp_info.aper_base,
+                    agp_info.aper_size << 20);
 #endif
+    }
 release:
     NV_AGPGART_BACKEND_RELEASE(drm_agp_p, nvl->agp_bridge);
 bailout:
@@ -204,9 +208,10 @@ RM_STATUS KernTeardownAGP(
 
     nvl = NV_GET_NVL_FROM_NV_STATE(nv);
 
-#ifdef CONFIG_MTRR
+#if defined(CONFIG_MTRR)
     if (nv_pat_mode == NV_PAT_MODE_DISABLED)
-        mtrr_del(-1, nv->agp.address, nv->agp.size);
+        nv_mtrr_del(nv->agp.arch_phys_wc_add_token, nv->agp.address,
+                    nv->agp.size);
 #endif
 
     NV_AGPGART_BACKEND_RELEASE(drm_agp_p, nvl->agp_bridge);

@@ -216,6 +216,7 @@ typedef struct
     NvU32 offset;
     NvU32 *map;
     nv_phwreg_t map_u;
+    NvS32 arch_phys_wc_add_token;
 } nv_aperture_t;
 
 typedef struct

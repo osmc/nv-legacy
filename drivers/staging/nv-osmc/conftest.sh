@@ -1538,6 +1538,12 @@ compile_test() {
             #   2016 Oct 13: 768ae309a96103ed02eb1e111e838c87854d8b51
             #   2016 Oct 13: 9beae1ea89305a9667ceaab6d0bf46a045ad71e7
             #
+            # get_user_pages_remote() added 'locked' parameter
+            #   2016 Dec 14:5b56d49fc31dbb0487e14ead790fc81ca9fb2c99
+            #
+            # conftest #1: check if get_user_pages_remote() is available
+            # return if not available.
+            # Fall through to conftest #2 if it is present
             echo "$CONFTEST_PREAMBLE
             #include <linux/mm.h>
             int conftest_get_user_pages_remote(void) {
@@ -1550,33 +1556,76 @@ compile_test() {
             if [ -f conftest$$.o ]; then
                 echo "#undef NV_GET_USER_PAGES_REMOTE_PRESENT" | append_conftest "functions"
                 echo "#undef NV_GET_USER_PAGES_HAS_WRITE_AND_FORCE_ARGS" | append_conftest "functions"
+                echo "#undef NV_GET_USER_PAGES_REMOTE_HAS_LOCKED_ARG" | append_conftest "functions"
+                rm -f conftest$$.o
+                return
+            fi
+
+            # conftest #2: check if get_user_pages() has write and
+            # force arguments. Return if these arguments are present
+            # Fall through to conftest #3 if these args are absent.
+            echo "#define NV_GET_USER_PAGES_REMOTE_PRESENT" | append_conftest "functions"
+            echo "$CONFTEST_PREAMBLE
+            #include <linux/mm.h>
+            long get_user_pages(unsigned long start,
+                                unsigned long nr_pages,
+                                int write,
+                                int force,
+                                struct page **pages,
+                                struct vm_area_struct **vmas) {
+                return 0;
+            }" > conftest$$.c
+
+            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
+            rm -f conftest$$.c
+
+            if [ -f conftest$$.o ]; then
+                echo "#define NV_GET_USER_PAGES_HAS_WRITE_AND_FORCE_ARGS" | append_conftest "functions"
+                echo "#undef NV_GET_USER_PAGES_REMOTE_HAS_LOCKED_ARG" | append_conftest "functions"
+                rm -f conftest$$.o
+                return
+            fi
+
+            # conftest #3: check if get_user_pages_remote() has locked argument
+            echo "#undef NV_GET_USER_PAGES_HAS_WRITE_AND_FORCE_ARGS" | append_conftest "functions"
+            echo "$CONFTEST_PREAMBLE
+            #include <linux/mm.h>
+            long get_user_pages_remote(struct task_struct *tsk,
+                                       struct mm_struct *mm,
+                                       unsigned long start,
+                                       unsigned long nr_pages,
+                                       unsigned int gup_flags,
+                                       struct page **pages,
+                                       struct vm_area_struct **vmas,
+                                       int *locked) {
+                return 0;
+            }" > conftest$$.c
+
+            $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
+            rm -f conftest$$.c
+
+            if [ -f conftest$$.o ]; then
+                echo "#define NV_GET_USER_PAGES_REMOTE_HAS_LOCKED_ARG" | append_conftest "functions"
                 rm -f conftest$$.o
             else
-                echo "#define NV_GET_USER_PAGES_REMOTE_PRESENT" | append_conftest "functions"
-
-                echo "$CONFTEST_PREAMBLE
-                #include <linux/mm.h>
-                long get_user_pages(unsigned long start,
-                                    unsigned long nr_pages,
-                                    int write,
-                                    int force,
-                                    struct page **pages,
-                                    struct vm_area_struct **vmas) {
-                    return 0;
-                }" > conftest$$.c
-
-                $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
-                rm -f conftest$$.c
-
-                if [ -f conftest$$.o ]; then
-                    echo "#define NV_GET_USER_PAGES_HAS_WRITE_AND_FORCE_ARGS" | append_conftest "functions"
-                    rm -f conftest$$.o
-                else
-                    echo "#undef NV_GET_USER_PAGES_HAS_WRITE_AND_FORCE_ARGS" | append_conftest "functions"
-                fi
+                echo "#undef NV_GET_USER_PAGES_REMOTE_HAS_LOCKED_ARG" | append_conftest "functions"
             fi
         ;;
+        arch_phys_wc_add)
+            #
+            # Determine if the arch_phys_wc_add() function is present.
+            # arch_phys_wc_add() was added by
+            #   2013 May 13: d0d98eedee2178c803dd824bb09f52b0e2ac1811
+            #   (Add arch_phys_wc_{add, del} to manipulate WC MTRRs if needed)
+            #
+            CODE="
+            #include <asm/io.h>
+            void conftest_arch_phys_wc_add() {
+                arch_phys_wc_add();
+            }"
 
+            compile_check_conftest "$CODE" "NV_ARCH_PHYS_WC_ADD_PRESENT" "" "functions"
+        ;;
     esac
 }
 
